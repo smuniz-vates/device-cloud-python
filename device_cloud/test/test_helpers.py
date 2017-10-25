@@ -89,6 +89,7 @@ def init_mock_mqtt():
             sleep(0.25)
         return 0
 
+    mock_mqtt._out_messages = []
     mock_mqtt.tls_set.return_value = 0
     mock_mqtt.connect.side_effect = mqtt_connect
     mock_mqtt.disconnect.side_effect = mqtt_disconnect
