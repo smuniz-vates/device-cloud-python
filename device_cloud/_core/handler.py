@@ -88,9 +88,12 @@ class Handler(object):
             self.logger = logging.getLogger("APP NAME HERE")
         log_formatter = logging.Formatter(constants.LOG_FORMAT,
                                           datefmt=constants.LOG_TIME_FORMAT)
-        log_handler = logging.StreamHandler()
-        log_handler.setFormatter(log_formatter)
-        self.logger.addHandler(log_handler)
+
+        if not self.config.quiet:
+            log_handler = logging.StreamHandler()
+            log_handler.setFormatter(log_formatter)
+            self.logger.addHandler(log_handler)
+
         if self.config.log_file:
             log_file_handler = logging.FileHandler(self.config.log_file)
             log_file_handler.setFormatter(log_formatter)
