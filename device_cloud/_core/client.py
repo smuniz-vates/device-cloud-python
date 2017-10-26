@@ -507,7 +507,7 @@ class Client(object):
                                         accuracy=accuracy, fix_type=fix_type)
         return self.handler.queue_publish(location)
 
-    def telemetry_publish(self, telemetry_name, value):
+    def telemetry_publish(self, telemetry_name, value, timestamp=None):
         """
         Publish telemetry to the Cloud
 
@@ -519,6 +519,6 @@ class Client(object):
           STATUS_SUCCESS               Telemetry has been queued for publishing
         """
 
-        telem = defs.PublishTelemetry(telemetry_name, value)
+        telem = defs.PublishTelemetry(telemetry_name, value, timestamp)
         return self.handler.queue_publish(telem)
 
