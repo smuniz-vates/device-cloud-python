@@ -22,6 +22,8 @@ Restart=always
 StandardOutput=journal
 StandardError=journal
 KillMode=process
+# deployment scripts should substitute this with the correct value.
+#WorkingDirectory=WORKING_DIRECTORY
 
 [Install]
 WantedBy=multi-user.target
