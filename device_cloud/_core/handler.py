@@ -88,12 +88,11 @@ class Handler(object):
             self.logger = logging.getLogger("APP NAME HERE")
         log_formatter = logging.Formatter(constants.LOG_FORMAT,
                                           datefmt=constants.LOG_TIME_FORMAT)
-
         if not self.config.quiet:
             log_handler = logging.StreamHandler()
             log_handler.setFormatter(log_formatter)
             self.logger.addHandler(log_handler)
-
+        
         if self.config.log_file:
             log_file_handler = logging.FileHandler(self.config.log_file)
             log_file_handler.setFormatter(log_formatter)
@@ -104,7 +103,9 @@ class Handler(object):
             self.logger.error("Missing key or cloud token from configuration")
             raise KeyError("Missing key or cloud token from configuration")
 
-        self.log_level(self.config.log_level)
+        #log_level default set as DEBUG
+        self.logger.setLevel(logging.DEBUG)
+        self.qos_level(self.config.qos_level)
 
         # Print configuration
         self.logger.debug("CONFIG:\n%s", self.config)
@@ -853,22 +854,27 @@ class Handler(object):
         return self.state == constants.STATE_CONNECTED
 
 
-    def log_level(self, log_level):
+    def log_level(self, log_level=None):
         """
         Set Logging Level
 
         """
-        if log_level in ('CRITICAL', 'DEBUG', 'ERROR', 'INFO', 'LOG', 'WARNING', 'ALL'):
-            if log_level == 'ALL':
-                log_number = getattr(logging, 'DEBUG')
-                self.logger.setLevel(log_number)
-                self.logger.warning("log_level set as 'ALL', DEBUG used as default")
+        if log_level:
+            if log_level in ('CRITICAL', 'DEBUG', 'ERROR', 'INFO', 'LOG', 'WARNING', 'ALL'):
+                if log_level == 'ALL':
+                    log_number = getattr(logging, 'DEBUG')
+                    self.logger.setLevel(log_number)
+                    self.logger.warning("log_level set as 'ALL', DEBUG used as default")
+                else:
+                    log_number = getattr(logging, log_level)
+                    self.logger.setLevel(log_number)
+                    self.logger.debug("log_level set as %s", log_level)
             else:
-                log_number = getattr(logging, log_level)
-                self.logger.setLevel(log_number)
-                self.logger.log(logging.INFO, "log_level Set As %s", log_level)
+                self.logger.setLevel(logging.DEBUG)
+                self.logger.warning("log_level not set or invalid, DEBUG used as default")
+
+        # If no log_level set, set as DEBUG
         else:
-            self.logger.warning("log_level not found, DEBUG used as default")
             self.logger.setLevel(logging.DEBUG)
 
         #self.logger.critical("This is a critical")
@@ -943,11 +949,9 @@ class Handler(object):
         """
         Callback when MQTT Client connects to Cloud
         """
-
         unfinished = self.num_unfinished()
-        if unfinished > 0:
+        if (unfinished > 0):
             self.logger.info("%s messages are pending..", unfinished)
-
         # Check connection result from MQTT
         self.logger.info("MQTT connected: %s", mqttlib.connack_string(rc))
         if rc == 0:
@@ -987,8 +991,23 @@ class Handler(object):
         Notify that a message has been published
         """
 
-        topic_num = self.reply_tracker.pop_mid(mid)
-        self.logger.debug("MQTT sent %s", topic_num)
+        if self.qos_level == 0:
+            pass
+        else:
+            topic_num = self.reply_tracker.pop_mid(mid)
+            self.logger.debug("MQTT sent %s", topic_num)
+
+    def qos_level(self, qos_level=None):
+        """
+        Set QoS Level
+
+        """
+        if qos_level in range(0, 2):
+            self.qos_level = qos_level
+            self.logger.info("qos_level set as %s", self.qos_level)
+        else:
+            self.logger.warning("qos_level invalid or not set, 1 used as default")
+            self.qos_level = 1
 
     def queue_publish(self, pub):
         """
@@ -1135,10 +1154,9 @@ class Handler(object):
                 self.topic_counter += 1
                 if topic_num not in self.reply_tracker:
                     break
-
             # Send payload over MQTT
             result, mid = self.mqtt.publish("api/{}".format(topic_num),
-                                            payload, 1)
+                                            payload, qos = self.qos_level)
 
             # Track the topic this message will send on
             self.reply_tracker.add_mid(mid, topic_num)

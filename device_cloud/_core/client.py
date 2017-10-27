@@ -129,25 +129,6 @@ class Client(object):
                 raise IOError("Failed to write device_id")
         self.config.update(kwargs, False)
 
-        kwargs = {}
-        # Check iot.cfg for log_level. If it does not exist, set DEBUG as log_level
-        log_level_path = os.path.join(self.config.config_dir, "iot.cfg")
-        if os.path.exists(log_level_path):
-            try:
-                with open(log_level_path, "r") as level_file:
-                    try:
-                         self.config.log_level = json.load(level_file)['log_level']
-                    except:
-                         self.config.log_level = "DEBUG"
-                         print("log_level path does not exist. DEBUG used as default")
-            except:
-                print("Failed to read log_level file")
-                raise IOError("Failed to read log_level file")
-        else:
-            self.config.log_level = "DEBUG"
-            print("log_level path does not exist. DEBUG used as default")
-            self.config.update(kwargs, False)
-
         # Check that all necessary configuration has been obtained
         if not self.config.cloud.token:
             print("Cloud token not set. Must be set in config")
@@ -195,6 +176,7 @@ class Client(object):
         self.warning = self.handler.logger.warning
 
         return STATUS_SUCCESS
+
 
     def action_acknowledge(self, request_id, error_code=0, error_message=""):
         """
@@ -361,7 +343,7 @@ class Client(object):
         Request diagonstic ping from the cloud
 
         Returns:
-          STATUS_SUCCESS               Successfully disconnected
+          STATUS_SUCCESS               True
         """
         return self.handler.handle_ping()
 
@@ -370,7 +352,7 @@ class Client(object):
         Request diagonstic time from the cloud
 
         Returns:
-          STATUS_SUCCESS               Successfully disconnected
+          STATUS_SUCCESS               Current cloud time
         """
         return self.handler.handle_time()
 
