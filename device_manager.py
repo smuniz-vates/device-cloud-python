@@ -366,6 +366,9 @@ if __name__ == "__main__":
     config = config_load()
     runtime_dir = config.runtime_dir
 
+    if hasattr(config, "log_level"):
+        client.log_level(config.log_level)
+
     upload_dir = os.path.join(runtime_dir, "upload")
     download_dir = os.path.join(runtime_dir, "download")
 
@@ -384,7 +387,6 @@ if __name__ == "__main__":
         client.log(iot.LOGERROR, ("Could not create one or more runtime "
                                   "directories! Did you run the device manager "
                                   "with sufficient priviliges?"))
-
 
     # Setup an OTA Handler
     ota = ota_handler.OTAHandler()
