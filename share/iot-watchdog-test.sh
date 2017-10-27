@@ -1,0 +1,202 @@
+#!/bin/bash
+#===============================================================================
+# Copyright (c) 2016 Wind River Systems, Inc.
+# The right to copy, distribute, modify, or otherwise
+# make use of this software may be licensed only pursuant
+# to the terms of an applicable Wind River license agreement.
+#
+#===============================================================================
+
+# This script is the systemd watchdog's "test_binary" as defined in
+# iot-watchdog.conf. The script will be invoked by watchdog periodically to
+# check if the iot has removed ${WRA_TRIGGER_TIMER_FLAG} (removal of the flag
+# indicates the iot service has successfully registered to cloud). If the flag exists
+# for longer than WRA_UPTIME, it's considered that a update has failed and a
+# rollback is neccessary. In this case the script returns -1 so that watchdog
+# will start a system reboot and thus a rollback inside ramfs. Otherwise, the
+# script will cleanup flags and stop the watchdog itself.
+
+WRA_UPTIME=180
+WRA_TRIGGER_TIMER_FLAG="%vardir%/ota_timer_triggered"
+WRA_BOOTONCE_FLAG="%vardir%/ota_bootonce"
+WRA_ROLLBACK_FLAG="%vardir%/ota_rollback_enabled"
+WRA_MIGRATION_FLAG="%vardir%/ota_migration"
+
+# find FAT dev
+function find_FAT_dev(){
+	# find the mount point of /
+	ROOTDEV=`df / | tail -1 | awk '{ print $1 }'`
+	LV_INFO=`sudo lvdisplay ${ROOTDEV} -c 2> /dev/null`
+	if [ -n $LV_INFO ]; then
+		# find the volume group name
+		IFS=':' read -a INFO <<< ${LV_INFO}
+		ROOTDEV_VG_NAME=${INFO[1]}
+		# use pvdisplay to print all available volume and save the names
+		DEVS=`pvdisplay -m | grep "PV Name" | awk '{print $NF}'`
+		# DEVS="/dev/sdb2 /dev/sda2"
+		for i in $DEVS ; do
+			VG_NAME=`pvdisplay $i -c | tail -1 | awk -F ':' '{print $2}'`
+			if [ ${VG_NAME} == ${ROOTDEV_VG_NAME} ] ; then
+				echo "${i%?}1"
+			fi
+		done
+	else
+		# non LVM kernel upgrade
+		# replace the last digit with 1, ie /dev/mmcblk0p1, /dev/sda1
+		echo "${ROOTDEV%?}1"
+	fi
+}
+
+# clear bootonce in FAT
+function clear_bootonce_in_FAT(){
+	FAT_DEV=$(find_FAT_dev)
+	if [ -n "${FAT_DEV}" ] ; then
+		temp_dir="$(sudo mktemp -d -p ./)"
+		sudo mount ${FAT_DEV} $temp_dir
+		# for u-boot, change the boot_flag to normal
+		if [ -e ${temp_dir}/boot_flag ] ; then
+			sudo echo "boot_flag=normal" > ${temp_dir}/boot_flag
+		fi
+		# remove bootonce images
+		if [ -e ${temp_dir}/bzImage-bootonce ]; then
+			rm -f ${temp_dir}/bzImage-bootonce
+		fi
+		if [ -e ${temp_dir}/idp-initramfs-bootonce.img ]; then
+			rm -f ${temp_dir}/idp-initramfs-bootonce.img
+		fi
+		sudo umount $temp_dir
+		rm -rf $temp_dir
+	fi
+}
+
+# copy bootonce kernel, initramfs to FAT partition
+function copy_new_kernel(){
+	# mount the boot directory
+	echo "Found boot partition in $1"
+	echo "Mount $1"
+	temp_dir="$(sudo mktemp -d -p ./)"
+	sudo mount $1 $temp_dir
+
+	# for u-boot, change the boot_flag to normal
+	if [ -e ${temp_dir}/boot_flag ] ; then
+		sudo echo "boot_flag=normal" > ${temp_dir}/boot_flag
+	fi
+	# rename uImage
+	if [ -e ${temp_dir}/uImage-bootonce ] ; then
+		sudo mv ${temp_dir}/uImage-bootonce ${temp_dir}/uImage
+	fi
+	# rename zImage
+	if [ -e ${temp_dir}/zImage-bootonce ] ; then
+		sudo mv ${temp_dir}/zImage-bootonce ${temp_dir}/zImage
+	fi
+	# rename bzImage
+	if [ -e ${temp_dir}/bzImage-bootonce ] ; then
+		sudo mv ${temp_dir}/bzImage-bootonce ${temp_dir}/bzImage
+	fi
+	# rename devicetree
+	if [ -e ${temp_dir}/devicetree-bootonce.dtb ] ; then
+		sudo mv ${temp_dir}/devicetree-bootonce.dtb ${temp_dir}/devicetree.dtb
+	fi
+	# rename bzImage-bootonce.auth to bzImage.auth
+	if [ -e ${temp_dir}/bzImage-bootonce.auth ] ; then
+		sudo mv ${temp_dir}/bzImage-bootonce.auth ${temp_dir}/bzImage.auth
+	fi
+	# rename idp-initramfs.img
+	if [ -e ${temp_dir}/idp-initramfs-bootonce.img ] ; then
+		sudo mv ${temp_dir}/idp-initramfs-bootonce.img ${temp_dir}/idp-initramfs.img
+	fi
+	# rename idp-initramfs.img.auth
+	if [ -e ${temp_dir}/idp-initramfs-bootonce.img.auth ] ; then
+		sudo mv ${temp_dir}/idp-initramfs-bootonce.img.auth ${temp_dir}/idp-initramfs.img.auth
+	fi
+	# umount both directory
+	sudo umount $temp_dir
+	rm -rf $temp_dir
+
+	# bootonce kernel successfully bootup
+	echo "Bootonce kernel successfully bootup, the kernel has been replaced by the new one."
+}
+
+# get eclipsed time since iot service start
+function time_since_start(){
+	# if watch dog is started from a reboot, the uptime will be system up time.
+	if [ -e ${WRA_BOOTONCE_FLAG} -o -e ${WRA_MIGRATION_FLAG} ] ; then
+		uptime=`cat /proc/uptime | awk '{print $1}'`
+	# if watch dog is started by update installer, the uptime will be the time since watchdog it's started.
+	else
+		start_t=`cat ${WRA_TRIGGER_TIMER_FLAG}`
+		end_t=`date +%s`
+		uptime=$(($end_t - $start_t))
+	fi
+	echo "$uptime"
+}
+
+# do not run more than one instance of this scripts because copying kernel image
+# may keep longer time and watchdog will expired again and run this script
+[ "$(pgrep -fn $0)" -ne "$(pgrep -fo $0)" ] && exit 0
+
+# if WRA_TRIGGER_TIMER_FLAG exists then check for WRA_UPTIME
+if [ -e ${WRA_TRIGGER_TIMER_FLAG} ] ; then
+	UPTIME=$(time_since_start)
+	echo "UPTIME = $UPTIME"
+	if (( ${UPTIME%.*} > ${WRA_UPTIME} )) ; then
+		# WRA_TRIGGER_TIMER_FLAG exists and it is longer then WRA_UPTIME seconds
+		# if the rootfs does not have sanpshot, do not reboot since it cannot rollback
+		ROOTDEV=`df / | tail -1 | awk '{ print $1 }'`
+		LV_INFO=`sudo lvdisplay ${ROOTDEV}_snapshot -c`
+		if [ -z ${LV_INFO} ] ; then
+			echo "Snapshot not available, cannot rollback."
+			# stop watchdog
+			clear_bootonce_in_FAT
+			systemctl stop iot-watchdog
+			exit 0
+		fi
+
+		# set the WRA_ROLLBACK_FLAG so that in initramfs bootup it will trigger a rollback
+		clear_bootonce_in_FAT
+		touch ${WRA_ROLLBACK_FLAG}
+		exit -1
+	fi
+else
+	# WRA_TRIGGER_TIMER_FLAG does not exist, everything should be ok
+	# stop the watchdog
+	echo "Stopping the watchdog service because target is up longer than"
+	echo "${WRA_UPTIME} seconds and ${WRA_TRIGGER_TIMER_FLAG} does not exist,"
+	echo "remove all rollback flags."
+
+	# clean up rollback flag
+	if [ -e ${WRA_ROLLBACK_FLAG} ] ; then
+		rm ${WRA_ROLLBACK_FLAG}
+	fi
+
+	# if cmdline have bootonce and we reach here. It is a bootonced kernel and the bootonce flag is enabled
+	# then copy bzImage-bootonce to bzImage
+	CHECK_BOOTONCE=`cat /proc/cmdline | grep -o bootonce`
+	if [ "${CHECK_BOOTONCE}" = "bootonce" -a -e ${WRA_BOOTONCE_FLAG} ] ; then
+		# find the mount point of /mnt and the size of the LV
+		FAT_DEV=$(find_FAT_dev)
+		if [ -n "${FAT_DEV}" ] ; then
+				echo "Found FAT partition in ${FAT_DEV}"
+				echo "Copying new kernel to ${FAT_DEV}"
+				copy_new_kernel ${FAT_DEV}
+		else
+				echo "Failed to find FAT partition"
+		fi
+	fi
+
+	# clean up bootonce flag
+	if [ -e ${WRA_BOOTONCE_FLAG} ] ; then
+		rm ${WRA_BOOTONCE_FLAG}
+	fi
+	# clean up migration flag
+	if [ -e ${WRA_MIGRATION_FLAG} ] ; then
+		rm ${WRA_MIGRATION_FLAG}
+	fi
+
+	# clear bootonce flag in FAT
+	clear_bootonce_in_FAT
+
+	# stop watchdog
+	systemctl stop iot-watchdog
+fi
+exit 0
