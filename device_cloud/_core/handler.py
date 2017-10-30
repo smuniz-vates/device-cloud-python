@@ -92,7 +92,7 @@ class Handler(object):
             log_handler = logging.StreamHandler()
             log_handler.setFormatter(log_formatter)
             self.logger.addHandler(log_handler)
-        
+
         if self.config.log_file:
             log_file_handler = logging.FileHandler(self.config.log_file)
             log_file_handler.setFormatter(log_formatter)
