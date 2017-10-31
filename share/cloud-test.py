@@ -1,0 +1,39 @@
+#!/usr/bin/env python
+"""
+This app is for testing connectivity using the default
+iot-connect.cfg file.  It will connect, report status and exit.
+"""
+import device_cloud as iot
+import os
+import sys
+
+# Initialize client default called 'python-demo-app'
+app_id = "cloud-test-py"
+client = iot.Client(app_id)
+
+# Use the same iot-connect as the device manager
+def_config_file = "/etc/python-device-cloud/iot-connect.cfg"
+if os.path.isfile(def_config_file):
+    client.config.config_file = def_config_file
+else:
+    print("Error: expected config file not found %s" % def_config_file)
+    sys.exit(1)
+
+# use the device manager's device_id if it exists
+def_config_dir = "/var/lib/python-device-cloud"
+if os.path.isdir(def_config_dir):
+    client.config.config_dir = def_config_dir
+else:
+    print("Error: expected config dir not found %s" % def_config_dir)
+    sys.exit(1)
+
+client.initialize()
+if client.connect(timeout=5) != iot.STATUS_SUCCESS:
+    print("Failed to connect")
+    ret = 1
+else:
+    print("Connection succeeded")
+    ret = 0
+
+client.disconnect()
+sys.exit(ret)
