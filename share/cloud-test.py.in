@@ -12,7 +12,7 @@ app_id = "cloud-test-py"
 client = iot.Client(app_id)
 
 # Use the same iot-connect as the device manager
-def_config_file = "/etc/python-device-cloud/iot-connect.cfg"
+def_config_file = "%etcdir%/iot-connect.cfg"
 if os.path.isfile(def_config_file):
     client.config.config_file = def_config_file
 else:
@@ -20,7 +20,7 @@ else:
     sys.exit(1)
 
 # use the device manager's device_id if it exists
-def_config_dir = "/var/lib/python-device-cloud"
+def_config_dir = "%vardir%"
 if os.path.isdir(def_config_dir):
     client.config.config_dir = def_config_dir
 else:
