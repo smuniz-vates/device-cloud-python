@@ -19,6 +19,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/device_manager.py
 Restart=always
+User=%user%
 StandardOutput=journal
 StandardError=journal
 KillMode=process
