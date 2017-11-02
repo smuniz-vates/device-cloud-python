@@ -102,11 +102,12 @@ def system_shutdown(delay=0, reboot=False, force=True):
     """
     Run the system shutdown command. Can be used to reboot the system.
     """
-    command = "shutdown "
     if POSIX:
-        command += "-r " if reboot else "-h "
+        command = "sudo /sbin/shutdown "
+        command += "-r +1" if reboot else "-h "
         command += "now " if delay == 0 else "+{} ".format(delay)
     elif WIN32:
+        command = "shutdown "
         command += "/r " if reboot else "/s "
         command += "/t {} ".format(delay*60)
         command += "/f" if force else ""

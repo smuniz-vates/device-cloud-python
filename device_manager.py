@@ -39,6 +39,9 @@ import device_cloud as iot
 
 running = True
 
+# whether to reset with systemd or not
+systemd_controlled = False
+
 default_cfg_dir = "."
 
 def sighandler(signum, frame):
@@ -86,7 +89,10 @@ def agent_reset(client, params, user_data, request):
 
     user_data[1].join()
     client.disconnect(wait_for_replies=True)
-    osal.execl("python", "device_manager.py")
+    if systemd_controlled != False:
+        osal.execl("systemctl", "restart device-manager")
+    else:
+        osal.execl("python", "device_manager.py")
 
     # If this return is hit, then the device manager did not restart properly
     return (iot.STATUS_FAILURE, "Device Manager Failed to Restart!")
