@@ -37,7 +37,6 @@ import platform
 
 from datetime import datetime
 
-
 if sys.version_info.major == 2:
     input = raw_input
 
@@ -46,6 +45,10 @@ cloud = ""
 validate_app = None
 default_thing_def = "hdc_validate_def"
 default_app_name = "hdc_validate_app"
+pycommand = "python"
+
+if sys.version_info.major == 3 and sys.platform.startswith("linux"):
+    pycommand = "python3"
 
 def _send(data, session_id=None):
     headers = None
@@ -286,7 +289,7 @@ def main():
                        " * Please export HDCAPPTOKEN=<app token> and run again")
 
     # Generate config for app with retrieved token
-    generate = subprocess.Popen("./generate_config.py -f validate.cfg "
+    generate = subprocess.Popen(pycommand+" generate_config.py -f validate.cfg "
                                 "-c "+cloud+" -p 8883 "
                                 "-t "+token, shell=True,
                                 stdout=subprocess.PIPE, stdin=subprocess.PIPE)
@@ -295,8 +298,8 @@ def main():
         error_quit("Failed to generate connection config for validation app.")
 
     # Remove the downloaded file if it exists from a previous validation
-    if os.path.isfile(os.path.abspath("validate_download")):
-        os.remove(os.path.abspath("validate_download"))
+    if os.path.isfile(os.path.abspath("validate_download.txt")):
+        os.remove(os.path.abspath("validate_download.txt"))
 
     # delete the thing in the cloud so that we don't have 100s of new
     # instances of test apps.  Write the device_id here and then check
@@ -319,11 +322,9 @@ def main():
     time.sleep(2)
 
     # Start app
-    validate_app = subprocess.Popen("."+os.sep+app_file,
+    validate_app = subprocess.Popen([pycommand, app_file],
                                     stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-
+                                    stdout=subprocess.PIPE)
 
     # Check to make sure thing is connected in Cloud
     thing = None
@@ -367,7 +368,7 @@ def main():
                print("Property not found in Cloud - FAIL")
                fails.append("Property retrieval")
 
-    # Check that the expected atribute value was published to the Cloud
+    # Check that the expected attribute value was published to the Cloud
     attr = None
     for i in range(10):
         attr_info = get_attribute(session_id, thing_key, "attribute")
@@ -475,8 +476,8 @@ def main():
             # there may be more than one file returned
             file_results = files_info["params"]["result"]
             for file in file_results:
-                if file["fileName"]  == "validate_upload":
-                    print("File uploaded: validate_upload - OK")
+                if file["fileName"]  == "validate_upload.txt":
+                    print("File uploaded: validate_upload.txt - OK")
                     loop_done = True
                     break
             if loop_done == True:
@@ -491,8 +492,8 @@ def main():
     while tries > 0:
         tries -= 1
         time.sleep(0.5)
-        if os.path.isfile(os.path.abspath("validate_download")):
-            print("File downloaded: validate_download - OK")
+        if os.path.isfile(os.path.abspath("validate_download.txt")):
+            print("File downloaded: validate_download.txt - OK")
             break
         else:
             if tries == 0:
@@ -501,7 +502,6 @@ def main():
 
     stop_app(validate_app)
     return fails
-
 
 if __name__ == "__main__":
     fails = []

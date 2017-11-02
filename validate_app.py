@@ -83,11 +83,11 @@ if __name__ == "__main__":
     client.event_publish("logs and such")
     client.alarm_publish("alarm", 1, "very serious alarm")
 
-    client.file_upload(os.path.abspath(__file__), upload_name="validate_upload",
+    client.file_upload(os.path.abspath(__file__), upload_name="validate_upload.txt",
                        blocking=True, timeout=30)
 
-    client.file_download("validate_upload",
-                         os.path.abspath("validate_download"),
+    client.file_download("validate_upload.txt",
+                         os.path.abspath("validate_download.txt"),
                          blocking=True, timeout=30)
 
     input("Hit enter to exit:")
