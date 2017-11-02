@@ -27,6 +27,7 @@ from device_cloud._core.constants import DEFAULT_LOOP_TIME
 from device_cloud._core.constants import DEFAULT_THREAD_COUNT
 from device_cloud._core.constants import STATUS_SUCCESS
 from device_cloud._core.constants import WORK_PUBLISH
+from device_cloud._core.constants import STATUS_NOT_FOUND
 from device_cloud._core import defs
 from device_cloud._core.handler import Handler
 
@@ -440,6 +441,14 @@ class Client(object):
           STATUS_TIMED_OUT             Wait for file transfer timed out. File
                                        transfer is still in progress.
         """
+        if upload_name == "upload":
+            result = []
+            for fn in os.listdir(file_path):
+                result.append(self.handler.request_upload((file_path+os.sep+fn), fn, blocking,
+                                           callback, timeout, file_global))
+            if not result:
+                return STATUS_NOT_FOUND
+            return max(result)
 
         return self.handler.request_upload(file_path, upload_name, blocking,
                                            callback, timeout, file_global)
