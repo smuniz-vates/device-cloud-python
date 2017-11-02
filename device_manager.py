@@ -30,6 +30,7 @@ import signal
 import sys
 from time import sleep
 import uuid
+import tarfile
 
 from device_cloud import osal
 from device_cloud import ota_handler
@@ -254,6 +255,15 @@ def file_upload(client, params, user_data):
             file_path = abspath(os.path.join(user_data[0], "upload", file_name))
         if file_path and not file_name:
             file_name = os.path.basename(file_path)
+        if not file_name and not file_path:
+            file_path = abspath(os.path.join(user_data[0], "upload"))
+            file_name = "upload"
+            if user_data[2]:
+                file_name = (file_path+".tar").replace("/", "")
+                with tarfile.open((file_path+os.sep+file_name), "w") as tar:
+                    for fn in os.listdir(file_path):
+                        tar.add((file_path+os.sep+fn), arcname=fn)
+                file_path = abspath(os.path.join(file_path, file_name))
         if file_path.startswith('~'):
             result = iot.STATUS_BAD_PARAMETER
             message = "Paths cannot use '~' to reference a home directory"
@@ -271,8 +281,23 @@ def file_upload(client, params, user_data):
                                         file_global=file_global)
             if result == iot.STATUS_SUCCESS:
                 message = ""
-                if user_data[1] and file_path.startswith(user_data[0]):
-                    os.remove(file_name)
+                if ".tar" in file_name:
+                    os.remove(file_path)
+                if user_data[1] and "upload" in file_path:
+                    try:
+                        if ".tar" in file_name:
+                            base = os.path.dirname(file_path)
+                            for fn in os.listdir(base):
+                                os.remove(base+os.sep+fn)
+                        elif file_name == "upload":
+                            for fn in os.listdir(file_path):
+                                os.remove(file_path+os.sep+fn)
+                        else:
+                            os.remove(file_path)
+
+                    except (OSError, IOError) as err:
+                        error = str(err)
+                        print(error+". Unable to remove file.")
             else:
                 message = iot.status_string(result)
         else:
@@ -397,7 +422,8 @@ if __name__ == "__main__":
                                 (runtime_dir,))
     action_register_conditional(client, "file_upload", file_upload, \
                                 config.actions_enabled.file_transfers, \
-                                (runtime_dir, config.upload_remove_on_success))
+                                (runtime_dir, config.upload_remove_on_success,
+                                config.upload_tar_file))
 
     action_register_conditional(client, "shutdown_device", device_shutdown, \
                                 config.actions_enabled.shutdown_device)
