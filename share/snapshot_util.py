@@ -238,7 +238,7 @@ def start_watchdog():
     print("INFO: iot-watchdog is to start to monitor agent ...\n")
 
     # make sure there are no existing watchdogs running
-    exec_cmd("sudo pkill -9 watchdog >& /dev/null")
+    exec_cmd("sudo /usr/bin/pkill -9 watchdog >& /dev/null")
 
     # start the watchdog
     cmd = 'sudo /usr/sbin/watchdog -f -c /etc/python-device-cloud/iot-watchdog.conf'
@@ -256,8 +256,8 @@ def usage():
             "\t-t\tSet watchdog trigger file\n" 
             "\t-w\tStart watchdog\n" 
             "\t-c\tClear trigger files\n" 
-            "\t-h\tThis output\n")
-            "\t-r\tSet rollback flag (for testing only)\n" 
+            "\t-h\tThis output\n"
+            "\t-r\tSet rollback flag (for testing only)\n") 
     print("\nNote: Each flag must be set sequentially.  For detailed usage notes, run\n"
           "\t $ pydoc snapshot_util")
     sys.exit(ERROR)
